@@ -103,12 +103,11 @@ class StarlingHomeHubThermostatEntity(StarlingHomeHubEntity, ClimateEntity):
         if "presetsAvailable" in device.properties:
             features |= ClimateEntityFeature.PRESET_MODE
 
-        # if "targetHumidity" in device.properties:
-            # features |= ClimateEntityFeature.TARGET_HUMIDITY
+        if "targetHumidity" in device.properties:
+            features |= ClimateEntityFeature.TARGET_HUMIDITY
 
-        # todo: fan support
-        # if "fanRunning" in device.properties:
-        #     features |= ClimateEntityFeature.FAN_MODE
+        if "fanRunning" in device.properties:
+            features |= ClimateEntityFeature.FAN_MODE
 
         return features
 
@@ -126,6 +125,32 @@ class StarlingHomeHubThermostatEntity(StarlingHomeHubEntity, ClimateEntity):
             return None
 
         return device.properties["currentTemperature"]
+
+    @property
+    def current_humidity(self) -> float | None:
+        """Return the current humidity."""
+        device = self.get_device()
+        if "humidityPercent" not in device.properties:
+            return None
+
+        return device.properties["humidityPercent"]
+
+    @property
+    def target_humidity(self) -> float | None:
+        """Return the humidity currently set to be reached."""
+        device = self.get_device()
+
+        if "targetHumidity" in device.properties:
+            return device.properties["targetHumidity"]
+
+        return None
+
+    async def async_set_humidity(self, humidity):
+        """Set new target humidity."""
+        await self.coordinator.update_device(
+            device_id=self.device_id,
+            update={"targetHumidity": humidity}
+        )
 
     @property
     def target_temperature(self) -> float | None:
@@ -209,6 +234,13 @@ class StarlingHomeHubThermostatEntity(StarlingHomeHubEntity, ClimateEntity):
             return FAN_ON
 
         return FAN_OFF
+
+    async def async_set_fan_mode(self, fan_mode):
+        """Set new target fan mode."""
+        await self.coordinator.update_device(
+            device_id=self.device_id,
+            update={"fanRunning": fan_mode == FAN_ON}
+        )
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         """Set new target temperature."""
