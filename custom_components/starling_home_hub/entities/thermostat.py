@@ -14,7 +14,6 @@ MIN_TEMP = 10
 MAX_TEMP = 32
 MIN_TEMP_RANGE = 1.66667
 
-# Mapping for sdm.devices.traits.ThermostatMode mode field
 THERMOSTAT_MODE_MAP: dict[str, HVACMode] = {
     "off": HVACMode.OFF,
     "heat": HVACMode.HEAT,
@@ -43,6 +42,7 @@ class StarlingHomeHubThermostatEntity(StarlingHomeHubEntity, ClimateEntity):
         self._attr_unique_id = f"{device_id}-thermostat"
         self._attr_temperature_unit = UnitOfTemperature.CELSIUS
         self._attr_supported_features = self._get_supported_features()
+        self._attr_preset_modes = self._get_preset_modes()
         self._attr_name = "Thermostat"
 
         device = self.get_device()
@@ -61,6 +61,56 @@ class StarlingHomeHubThermostatEntity(StarlingHomeHubEntity, ClimateEntity):
             self._attr_hvac_modes.append(HVACMode.OFF)
 
         super().__init__(coordinator)
+
+    async def async_set_preset_mode(self, preset_mode):
+        """Set new target preset mode."""
+        await self.coordinator.update_device(
+            device_id=self.device_id,
+            update={"presetSelected": preset_mode}
+        )
+
+    @property
+    def preset_mode(self) -> str | None:
+        """Return the current preset mode."""
+        device = self.get_device()
+
+        if "presetSelected" in device.properties and device.properties["presetSelected"]:
+            return device.properties["presetSelected"]
+        else:
+            return None
+
+    def _get_preset_modes(self) -> list[str] | None:
+        """Return the list of available preset modes."""
+        device = self.get_device()
+
+        if "presetsAvailable" in device.properties:
+            return device.properties["presetsAvailable"].split(",")
+        else:
+            return None
+
+    def _get_supported_features(self) -> ClimateEntityFeature:
+        """Compute the bitmap of supported features from the current state."""
+        features = ClimateEntityFeature.TURN_OFF | ClimateEntityFeature.TURN_ON
+
+        device = self.get_device()
+
+        if device.properties["canHeatCool"]:
+            features |= ClimateEntityFeature.TARGET_TEMPERATURE_RANGE
+
+        if device.properties["canHeat"] or device.properties["canCool"]:
+            features |= ClimateEntityFeature.TARGET_TEMPERATURE
+
+        if "presetsAvailable" in device.properties:
+            features |= ClimateEntityFeature.PRESET_MODE
+
+        # if "targetHumidity" in device.properties:
+            # features |= ClimateEntityFeature.TARGET_HUMIDITY
+
+        # todo: fan support
+        # if "fanRunning" in device.properties:
+        #     features |= ClimateEntityFeature.FAN_MODE
+
+        return features
 
     @property
     def available(self) -> bool:
@@ -143,28 +193,6 @@ class StarlingHomeHubThermostatEntity(StarlingHomeHubEntity, ClimateEntity):
             return HVACAction.OFF
         else:
             return None
-
-    def _get_supported_features(self) -> ClimateEntityFeature:
-        """Compute the bitmap of supported features from the current state."""
-        features = ClimateEntityFeature.TURN_OFF | ClimateEntityFeature.TURN_ON
-
-        device = self.get_device()
-
-        if device.properties["canHeatCool"]:
-            features |= ClimateEntityFeature.TARGET_TEMPERATURE_RANGE
-
-        if device.properties["canHeat"] or device.properties["canCool"]:
-            features |= ClimateEntityFeature.TARGET_TEMPERATURE
-
-        # todo: preset support
-        # if "presetsAvailable" in device.properties:
-        #     features |= ClimateEntityFeature.PRESET_MODE
-
-        # todo: fan support
-        # if "fanRunning" in device.properties:
-        #     features |= ClimateEntityFeature.FAN_MODE
-
-        return features
 
     @property
     def fan_modes(self) -> list[str]:
